@@ -1,87 +1,41 @@
+const config = require('config');
+const startupDebugger = require('debug')('app:startup');
+const dbDebugger = require('debug')('app:db');
+const log = require('./middleware/logger');//custom middleware
+const helmet = require('helmet');//3rd party middleware
+const morgan = require('morgan');//3rd party middleware
 const Joi = require('joi');
+
+const courses = require('./routes/courses');
+const home = require('./routes/homepage');
 const  express = require('express');
 const app = express();
+
+app.set('view engine','pug');
+
+
 app.use(express.json());
+app.use(express.urlencoded({extended: true}));
+app.use(express.static('public'));
+app.use(helmet());
+app.use('/api/courses', courses);
+app.use('/', home);
 
-const courses = [
-    {id: 1, name: 'CMP400'},
-    {id: 2, name: 'CMP401'},
-    {id: 3, name: 'CMP403'},
-];
-
-app.get('/',(req,res)=>{
-    res.send("Hello Worldddddd");
-})
-
-app.get('/api/courses', (req,res)=>{
-    res.send(courses);
-});
-
-app.post('/api/courses', (req,res)=>{
-    const {error} = validateCourse(req.body); //since we are only interested in the error property we can do object destructuring {error} this gives us the error value
-    if(error){
-    return  res.status(400).send(error.details[0].message);
-    }
+//Configuration
+console.log(`Application name: ${config.get('name')}`);
+console.log(`Mail name: ${config.get('mail.host')}`);
+console.log(`Mail password: ${config.get('mail.password')}`);
 
 
-    //here we create a new course object
-    const course = {
-        id: courses.length + 1,
-        name: req.body.name
-    }
-    courses.push(course);
-    res.send(course); 
-})
-
-app.put('/api/courses/:id', (req,res)=>{
-    //look up the course
-    //if it doesnt exist 404
-    const course = courses.find(c=> c.id === parseInt(req.params.id));
-    if(!course){
-        res.status(404).send("CourseId doesnt exist");
-    }
-
-    //validation
-    //if invalid
-//we validate the entire request body not just the name even if we only have a name in this case
-    const {error} = validateCourse(req.body); //since we are only interested in the error property we can do object destructuring {error} this gives us the error value
-    if(error){
-     return   res.status(400).send(error.details[0].message);
-    }
-
-    //update course
-    course.name = req.body.name;
-    //send the updated course
-    res.send(course);
-});
-
-app.delete('/api/courses/:id', (req,res)=>{
-const course =  courses.find(c=> c.id == parseInt(req.params.id));
-if(!course){
-  return  res.status(404).send("Course with given ID does not exists.");
-}  
-const index =  courses.indexOf(course);
-courses.splice(index,1);
-res.send(course);
-});
-
-function validateCourse(course){
-    const schema = {
-        name: Joi.string().min(3).required()
-    };
-    return Joi.validate(course,schema);
-
+if(app.get('env') === 'development'){
+    app.use(morgan('tiny'));
+    startupDebugger("Logging enabled in dev mode");
 }
 
-app.get('/api/courses/:id',(req,res)=>{
-    //req.params.id returns a string and we are dealing with int
-    //so we have to parse it
-  const course =  courses.find(c=> c.id === parseInt(req.params.id));
-  if(!course){
-  return  res.status(404).send("The given courseId wasnt found"); 
-  }
-  res.send(course);
-});
+//db
+dbDebugger("Database is up and runnning");
+app.use(log);
+
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Listening on port ${port}...`);
